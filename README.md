@@ -1,3 +1,52 @@
+# Gestion du projet Strapi – GitLab & GitHub
+
+Ce dépôt GitLab sert de miroir pour le suivi académique, tandis que le **déploiement Strapi Cloud est lié au repo GitHub**.  
+
+## 1. Organisation des remotes
+
+- **origin** : GitLab (suivi académique)  
+- **github** : GitHub (Strapi Cloud)  
+
+L’upstream principal est configuré pour GitHub. Cela permet d’utiliser `git pull` et `git push` pour synchroniser avec Strapi Cloud par défaut.
+
+---
+
+## 2. Bonnes pratiques pour les développeurs
+
+1. **Cloner le repo localement** depuis GitLab ou GitHub :  
+
+```bash
+git clone git@gitlab.univ-nantes.fr:<chemin_du_repo>.git
+cd <nom_du_repo>
+```
+
+Vérifier les remotes :
+``` bash
+git remote -v
+```
+
+Tu dois voir origin (GitLab) et github (GitHub).
+
+Travailler sur sa branche locale et committer les modifications des fichiers Strapi (schema.json, controllers, services, etc.).
+
+Pull / mise à jour depuis les deux remotes :
+
+```bash
+git pull origin main   # récupérer les changements GitLab
+git pull github main   # récupérer les changements GitHub
+```
+
+Pousser les modifications :
+
+```bash
+git push              # pousse vers l’upstream (GitHub par défaut)
+git push origin main  # pousse vers GitLab pour l’équipe
+```
+
+Astuce : création d'un alias pushall pour pousser sur les deux remotes en une seule commande.
+
+
+
 # Projet Strapi – Mise en place pour les développeurs
 
 Ce guide explique comment installer et lancer le projet Strapi localement avec une base PostgreSQL, pour tous les membres de l'équipe.
