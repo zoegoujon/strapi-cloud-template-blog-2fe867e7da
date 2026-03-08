@@ -1,0 +1,13 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_projects",
+  "info": {"singularName": "user-project","pluralName": "user-projects","displayName": "User Project"},
+  "options": {"draftAndPublish": false},
+  "attributes": {
+    "followed_since": {"type": "datetime"},
+    "total_donated": {"type": "decimal"},
+    "donation_count": {"type": "integer"},
+    "user": {"type": "relation","relation": "manyToOne","target": "api::user.user","inversedBy": "user_projects"},
+    "project": {"type": "relation","relation": "manyToOne","target": "api::project.project","inversedBy": "user_projects"}
+  }
+}

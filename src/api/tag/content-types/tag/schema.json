@@ -1,0 +1,11 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tags",
+  "info": {"singularName": "tag","pluralName": "tags","displayName": "Tag"},
+  "options": {"draftAndPublish": false},
+  "attributes": {
+    "nom": {"type": "string","required": true},
+    "type": {"type": "enumeration","enum":["expertise","category"]},
+    "project_tags": {"type": "relation","relation": "oneToMany","target": "api::project-tag.project-tag","mappedBy": "tag"}
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "collectionType",
+  "collectionName": "project_tags",
+  "info": {"singularName": "project-tag","pluralName": "project-tags","displayName": "Project Tag"},
+  "options": {"draftAndPublish": false},
+  "attributes": {
+    "project": {"type": "relation","relation": "manyToOne","target": "api::project.project","inversedBy": "project_tags"},
+    "tag": {"type": "relation","relation": "manyToOne","target": "api::tag.tag","inversedBy": "project_tags"}
+  }
+}

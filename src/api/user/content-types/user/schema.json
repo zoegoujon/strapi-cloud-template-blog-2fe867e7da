@@ -1,0 +1,18 @@
+{
+  "kind": "collectionType",
+  "collectionName": "users",
+  "info": {"singularName": "user", "pluralName": "users", "displayName": "User"},
+  "options": {"draftAndPublish": false},
+  "attributes": {
+    "email": {"type": "email", "unique": true, "required": true},
+    "first_name": {"type": "string"},
+    "last_name": {"type": "string"},
+    "username": {"type": "string"},
+    "mdp": {"type": "password"},
+    "phonenumber": {"type": "integer"},
+    "helloasso_id": {"type": "string"},
+    "notif_mail": {"type": "boolean", "default": false},
+    "notif_push": {"type": "boolean", "default": false},
+    "user_projects": {"type": "relation","relation": "oneToMany","target": "api::user-project.user-project","mappedBy": "user"}
+  }
+}

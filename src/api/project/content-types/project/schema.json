@@ -1,0 +1,20 @@
+{
+  "kind": "collectionType",
+  "collectionName": "projects",
+  "info": {"singularName": "project","pluralName": "projects","displayName": "Project"},
+  "options": {"draftAndPublish": false},
+  "attributes": {
+    "title": {"type": "string","required": true},
+    "description": {"type": "text"},
+    "content": {"type": "richtext"},
+    "thumbnail": {"type": "media","multiple": false,"allowedTypes":["images"]},
+    "goal_amount": {"type": "decimal"},
+    "current_amount": {"type": "decimal"},
+    "status": {"type": "enumeration","enum":["draft","active","funded","completed","cancelled"]},
+    "start_date": {"type": "datetime"},
+    "end_date": {"type": "datetime"},
+    "last_sync": {"type": "datetime"},
+    "user_projects": {"type": "relation","relation": "oneToMany","target": "api::user-project.user-project","mappedBy": "project"},
+    "project_tags": {"type": "relation","relation": "oneToMany","target": "api::project-tag.project-tag","mappedBy": "project"}
+  }
+}
