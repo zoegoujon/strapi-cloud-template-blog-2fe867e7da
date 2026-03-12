@@ -1,21 +1,18 @@
-'use strict';
-const bootstrap = require("./bootstrap");
-
+// ./src/index.js
 module.exports = {
-  /**
-   * An asynchronous register function that runs before
-   * your application is initialized.
-   *
-   * This gives you an opportunity to extend code.
-   */
-  register(/*{ strapi }*/) {},
-
-  /**
-   * An asynchronous bootstrap function that runs before
-   * your application gets started.
-   *
-   * This gives you an opportunity to set up your data model,
-   * run jobs, or perform some special logic.
-   */
-  bootstrap,
+  register({ strapi }) {
+    const userContentType = strapi.contentType('plugin::users-permissions.user');
+    userContentType.attributes = {
+      // Spread the existing native attributes to keep them
+      ...userContentType.attributes,
+      // Add your custom attributes
+      first_name:    { type: 'string' },
+      last_name:     { type: 'string' },
+      phone_number:  { type: 'string' },
+      helloasso_id:  { type: 'string' },
+      notif_mail:    { type: 'boolean', default: true },
+      notif_push:    { type: 'boolean', default: false }
+    };
+  },
+  bootstrap({ strapi }) {},
 };

@@ -7,7 +7,7 @@
     "followed_since": {"type": "datetime"},
     "total_donated": {"type": "decimal"},
     "donation_count": {"type": "integer"},
-    "user": {"type": "relation","relation": "manyToOne","target": "api::user.user","inversedBy": "user_projects"},
+    "user": {"type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user"},
     "project": {"type": "relation","relation": "manyToOne","target": "api::project.project","inversedBy": "user_projects"}
   }
 }

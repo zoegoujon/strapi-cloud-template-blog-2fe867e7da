@@ -11,6 +11,7 @@ Icon
 ._*
 node_modules
 .env
+notes.txt
 
 ############################
 # Linux
