@@ -430,35 +430,6 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiProjectTagProjectTag extends Struct.CollectionTypeSchema {
-  collectionName: 'project_tags';
-  info: {
-    displayName: 'Project Tag';
-    pluralName: 'project-tags';
-    singularName: 'project-tag';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String & Schema.Attribute.Private;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::project-tag.project-tag'
-    > &
-      Schema.Attribute.Private;
-    project: Schema.Attribute.Relation<'manyToOne', 'api::project.project'>;
-    publishedAt: Schema.Attribute.DateTime;
-    tag: Schema.Attribute.Relation<'manyToOne', 'api::tag.tag'>;
-    updatedAt: Schema.Attribute.DateTime;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-  };
-}
-
 export interface ApiProjectProject extends Struct.CollectionTypeSchema {
   collectionName: 'projects';
   info: {
@@ -474,11 +445,11 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    crm_id: Schema.Attribute.Integer & Schema.Attribute.Required;
+    crm_id: Schema.Attribute.Integer & Schema.Attribute.Unique;
     current_amount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     description: Schema.Attribute.Text;
     end_date: Schema.Attribute.DateTime;
-    goal_amount: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    goal_amount: Schema.Attribute.Decimal;
     last_sync: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -486,15 +457,12 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
       'api::project.project'
     > &
       Schema.Attribute.Private;
-    project_tags: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::project-tag.project-tag'
-    >;
     publishedAt: Schema.Attribute.DateTime;
     start_date: Schema.Attribute.DateTime;
     status: Schema.Attribute.Enumeration<
       ['draft', 'active', 'funded', 'completed', 'cancelled']
     >;
+    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
     thumbnail: Schema.Attribute.Media<'images'>;
     title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -504,7 +472,7 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::user-project.user-project'
     >;
-    wordpress_id: Schema.Attribute.Integer;
+    wordpress_id: Schema.Attribute.Integer & Schema.Attribute.Unique;
   };
 }
 
@@ -526,10 +494,7 @@ export interface ApiTagTag extends Struct.CollectionTypeSchema {
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::tag.tag'> &
       Schema.Attribute.Private;
     nom: Schema.Attribute.String & Schema.Attribute.Required;
-    project_tags: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::project-tag.project-tag'
-    >;
+    projects: Schema.Attribute.Relation<'manyToMany', 'api::project.project'>;
     publishedAt: Schema.Attribute.DateTime;
     type: Schema.Attribute.Enumeration<['expertise', 'category']>;
     updatedAt: Schema.Attribute.DateTime;
@@ -1089,7 +1054,6 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
-      'api::project-tag.project-tag': ApiProjectTagProjectTag;
       'api::project.project': ApiProjectProject;
       'api::tag.tag': ApiTagTag;
       'api::user-project.user-project': ApiUserProjectUserProject;
