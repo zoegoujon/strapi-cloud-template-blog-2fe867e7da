@@ -8,15 +8,20 @@
     "description": {"type": "text"},
     "content": {"type": "richtext"},
     "thumbnail": {"type": "media","multiple": false,"allowedTypes":["images"]},
-    "goal_amount": {"type": "decimal","required": true},
+    "goal_amount": {"type": "decimal","required": false},
     "current_amount": {"type": "decimal", "default": 0},
     "status": {"type": "enumeration","enum":["draft","active","funded","completed","cancelled"]},
     "start_date": {"type": "datetime"},
     "end_date": {"type": "datetime"},
     "last_sync": {"type": "datetime"},
-    "wordpress_id": {"type": "integer"},
-    "crm_id": {"type": "integer", "required": true},
+    "wordpress_id": {"type": "integer", "unique": true, "required": false},
+    "crm_id": {"type": "integer", "required": false, "unique": true },
     "user_projects": {"type": "relation","relation": "oneToMany","target": "api::user-project.user-project","mappedBy": "project"},
-    "project_tags": {"type": "relation","relation": "oneToMany","target": "api::project-tag.project-tag","mappedBy": "project"}
+    "tags": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::tag.tag",
+      "inversedBy": "projects"
+    }
   }
 }
