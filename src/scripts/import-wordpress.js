@@ -386,6 +386,10 @@ if (item.category) {
   }
 }
 
+    if (status === "funded"){
+      current_amount = goal_amount;
+    }
+
     const projectData = {
       // debugging
       //_debug_meta: { sections, faq, thanks, contentParts },
@@ -423,6 +427,9 @@ if (item.category) {
 
     const { Readable } = require('stream');
 
+    console.log("Processing project:", title);
+    console.log("crm_id", projectData.crm_id);
+
 // Remplace le bloc d'upload par ceci :
 if (projectData.thumbnail_url) {
   console.log("Processing thumbnail for project:", title);
@@ -451,10 +458,11 @@ if (projectData.thumbnail_url) {
             }
         },
         files: {
-            name: filename,
+            originalName: filename,
             type: mimeType,
             size: buffer.length,
             filepath: tempPath,
+            mimetype: mimeType,
         },
     });
 
@@ -559,7 +567,7 @@ async function syncFundingAmounts(strapi) {
   const projects = await strapi.entityService.findMany(
     "api::project.project",
     {
-      fields: ["id", "title", "crm_id", "goal_amount", "current_amount"],
+      fields: ["id", "title", "crm_id", "goal_amount", "current_amount", "status"],
       limit: 10000
     }
   );
@@ -568,6 +576,7 @@ async function syncFundingAmounts(strapi) {
   const projectMap = new Map();
 
   for (const p of projects) {
+    if (p.status === "funded") continue; // ne pas sync les projets déjà financés
     if (p.crm_id) {
       projectMap.set(String(p.crm_id), p);
     }

@@ -445,7 +445,7 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    crm_id: Schema.Attribute.Integer & Schema.Attribute.Unique;
+    crm_id: Schema.Attribute.Integer;
     current_amount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     description: Schema.Attribute.Text;
     end_date: Schema.Attribute.DateTime;

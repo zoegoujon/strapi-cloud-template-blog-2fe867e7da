@@ -15,7 +15,7 @@
     "end_date": {"type": "datetime"},
     "last_sync": {"type": "datetime"},
     "wordpress_id": {"type": "integer", "unique": true, "required": false},
-    "crm_id": {"type": "integer", "required": false, "unique": true },
+    "crm_id": {"type": "integer", "required": false},
     "user_projects": {"type": "relation","relation": "oneToMany","target": "api::user-project.user-project","mappedBy": "project"},
     "tags": {
       "type": "relation",
