@@ -6,6 +6,7 @@
   "attributes": {
     "nom": {"type": "string","required": true},
     "type": {"type": "enumeration","enum":["expertise","category"]},
+    "icone": {"type": "media","multiple": false,"allowedTypes":["images"]},
     "projects": {
       "type": "relation",
       "relation": "manyToMany",
