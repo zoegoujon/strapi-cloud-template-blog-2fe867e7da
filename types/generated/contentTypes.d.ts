@@ -448,7 +448,6 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     crm_id: Schema.Attribute.Integer;
     current_amount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     description: Schema.Attribute.Text;
-    end_date: Schema.Attribute.DateTime;
     goal_amount: Schema.Attribute.Decimal;
     last_sync: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
@@ -458,11 +457,11 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
-    start_date: Schema.Attribute.DateTime;
     status: Schema.Attribute.Enumeration<
       ['draft', 'active', 'funded', 'completed', 'cancelled']
     >;
     tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
+    temporalite: Schema.Attribute.Enumeration<['pluriannuel', 'annuel']>;
     thumbnail: Schema.Attribute.Media<'images'>;
     title: Schema.Attribute.String & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -490,6 +489,7 @@ export interface ApiTagTag extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    icone: Schema.Attribute.Media<'images'>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::tag.tag'> &
       Schema.Attribute.Private;
