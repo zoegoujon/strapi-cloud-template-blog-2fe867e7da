@@ -148,6 +148,7 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
     let helloassoId = null;
     let goal_amount = null;
     let current_amount = null;
+    let temporalite = "annuel";
 
     let sections = {};
     let faq = [];
@@ -158,8 +159,14 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
       let rawVal = meta["wp:meta_value"];
       let value = decodeXmlString(rawVal);
 
+      if (value==="0" || value==="h2"){
+        //console.log("key à rejetée", key);
+        //console.log(!value, value.startsWith("field_"), key.includes("options"), key.includes("espacement"), key.includes("enabled"))
+      }
+
       // Skip empty/null values and ACF field keys (e.g. "field_..." values)
-      if (!value || value.startsWith("field_")) {
+      if (!value || value.startsWith("field_") || key.includes("options") || key.includes("espacement") || key.includes("enabled")) {
+        //console.log("key rejetée", key)
         continue;
       }
       // we already trimmed during decode so nothing else needed
@@ -176,7 +183,7 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
       }
 
       // AMOUNTS
-      if (["projet_recolte", "projet_finance", "projet_helloasso"].includes(key)) {
+      if (["projet_recolte", "projet_finance", "projet_helloasso", "projet_type"].includes(key)) {
       }
 
       if (key === "projet_recolte") {
@@ -189,6 +196,10 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
         status = "funded";
       }
 
+      if (key === "projet_type" && value.includes("pluriannuel")){
+        temporalite = "pluriannuel"
+      }
+
       if (key === "projet_finance") {
         const num = Number(value);
         goal_amount = Number.isFinite(num) ? num : null;
@@ -199,7 +210,9 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
         helloassoId = Number.isFinite(num) ? num : null;
       }
 
-    
+    if (value==="0" || value === "h1" || value === "h2" || value === "h3" || value === "h4") {
+      continue;
+    }
 
       // MATCH SECTIONS
       const sectionMatch = key?.match(/sections_(\d+)_(.*)/);
@@ -397,6 +410,7 @@ if (item.category) {
       title,
       description,
       content,
+      temporalite,
       status,
       wordpress_id: wordpressId,
       crm_id: helloassoId,
