@@ -3,6 +3,8 @@ const { XMLParser } = require("fast-xml-parser");
 const he = require("he");
 const path = require("path");
 const { Readable } = require('stream');
+const os = require('os');
+
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -457,7 +459,8 @@ if (projectData.thumbnail_url) {
       const buffer = Buffer.from(await resp.arrayBuffer());
       const filename = getFilenameFromUrl(projectData.thumbnail_url);
       const mimeType = resp.headers.get("content-type") || "image/jpeg";
-      const tempPath = `/tmp/${Date.now()}-${filename}`;
+      const osTmp = os.tmpdir()
+      const tempPath = `${osTmp}/${Date.now()}-${filename}`;
 
       fs.writeFileSync(tempPath, buffer);
 
