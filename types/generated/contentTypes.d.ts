@@ -1007,6 +1007,7 @@ export interface PluginUsersPermissionsUser
       Schema.Attribute.SetMinMaxLength<{
         minLength: 6;
       }>;
+    fcm: Schema.Attribute.String;
     first_name: Schema.Attribute.String;
     helloasso_id: Schema.Attribute.String;
     last_name: Schema.Attribute.String;

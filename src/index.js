@@ -8,7 +8,8 @@ module.exports = {
       phone_number: { type: 'string' },
       helloasso_id: { type: 'string' },
       notif_mail:   { type: 'boolean', default: true },
-      notif_push:   { type: 'boolean', default: false }
+      notif_push:   { type: 'boolean', default: false },
+      fcm :          { type: 'string' },
     });
   },
   bootstrap({ strapi }) {},
