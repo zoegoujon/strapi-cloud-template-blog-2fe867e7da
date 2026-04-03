@@ -456,7 +456,12 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
       'api::project.project'
     > &
       Schema.Attribute.Private;
+    powerpoint: Schema.Attribute.Text;
     publishedAt: Schema.Attribute.DateTime;
+    quote_author: Schema.Attribute.String;
+    quote_content: Schema.Attribute.Text;
+    quote_pp: Schema.Attribute.Media<'images'>;
+    soustitre: Schema.Attribute.Text;
     status: Schema.Attribute.Enumeration<
       ['draft', 'active', 'funded', 'completed', 'cancelled']
     >;

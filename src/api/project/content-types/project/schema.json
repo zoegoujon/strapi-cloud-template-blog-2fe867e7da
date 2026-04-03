@@ -5,8 +5,13 @@
   "options": {"draftAndPublish": false},
   "attributes": {
     "title": {"type": "string","required": true},
+    "soustitre": {"type": "text"},
     "description": {"type": "text"},
     "content": {"type": "richtext"},
+    "quote_content": {"type": "text"},
+    "quote_author": {"type": "string"},
+    "quote_pp": {"type": "media","multiple": false,"allowedTypes":["images"]},
+    "powerpoint": {"type": "text"},
     "thumbnail": {"type": "media","multiple": false,"allowedTypes":["images"]},
     "goal_amount": {"type": "decimal","required": false},
     "current_amount": {"type": "decimal", "default": 0},
