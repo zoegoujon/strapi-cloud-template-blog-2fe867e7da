@@ -2,9 +2,7 @@ const fs = require("fs");
 const { XMLParser } = require("fast-xml-parser");
 const he = require("he");
 const path = require("path");
-const { Readable } = require('stream');
-const os = require('os');
-
+const os = require("os");
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -14,22 +12,16 @@ const parser = new XMLParser({
 });
 
 const tagCache = new Map();
-
-
-// remove HTML tags from string
 function stripHtml(html) {
   if (!html) return "";
   return html.replace(/<[^>]*>/g, "").trim();
 }
 
 function getFilenameFromUrl(url) {
-  const cleanUrl = url.split("?")[0];
-  return path.basename(cleanUrl);
+  return path.basename(url.split("?")[0]);
 }
 
-// safe wrapper around he.decode that can deal with various parser outputs
 function decodeXmlString(raw) {
-  // convert to plain string before decoding, then trim
   let str = "";
   if (typeof raw === "string") {
     str = raw;
@@ -38,536 +30,466 @@ function decodeXmlString(raw) {
   } else if (raw && typeof raw["#cdata"] === "string") {
     str = raw["#cdata"];
   } else if (typeof raw === "number") {
-    str = raw.toString();
+    str = String(raw);
   }
-  const decoded = he.decode(str).trim();
-  return decoded;
+  return he.decode(str).trim();
 }
 
 function projectChanged(existing, incoming) {
   const fields = [
-    "title",
-    "description",
-    "content",
+    "title", 
+    "description", 
+    "content", 
     "status",
-    "wordpress_id",
-    "crm_id",
-    "goal_amount",
+    "wordpress_id", 
+    "crm_id", 
+    "goal_amount", 
     "current_amount",
-    "thumbnail",
+    "thumbnail", 
+    "temporalite", 
+    "quote_content", 
+    "quote_author",
+    "quote_pp",
+    "soustitre", 
+    "powerpoint", 
   ];
 
   for (const field of fields) {
     if (["crm_id", "goal_amount", "current_amount", "thumbnail"].includes(field)) {
-      const existingNum = Number(existing[field] ?? 0);
-      const incomingNum = Number(incoming[field] ?? 0);
-      if (existingNum !== incomingNum) {
-        return true;
-      }
+      if (Number(existing[field] ?? 0) !== Number(incoming[field] ?? 0)) return true;
       continue;
     }
-
-    if ((existing[field] || "") !== (incoming[field] || "")) {
-      return true;
-    }
+    if ((existing[field] || "") !== (incoming[field] || "")) return true;
   }
-
   return false;
 }
 
 function tagsChanged(existingTags = [], newTagIds = []) {
-  const existingIds = existingTags.map(t => t.id).sort();
-  const incomingIds = [...newTagIds].sort();
-
-  return JSON.stringify(existingIds) !== JSON.stringify(incomingIds);
+  const a = existingTags.map((t) => t.id).sort();
+  const b = [...newTagIds].sort();
+  return JSON.stringify(a) !== JSON.stringify(b);
 }
 
 async function getOrCreateTag(strapi, name, type) {
-    const key = `${name}-${type}`;
+  const cacheKey = `${name}-${type}`;
+  if (tagCache.has(cacheKey)) return tagCache.get(cacheKey);
 
-if (tagCache.has(key)) {
-  return tagCache.get(key);
-}
-
-  const existing = await strapi.entityService.findMany('api::tag.tag', {
-    filters: { nom: name, type: type },
+  const existing = await strapi.entityService.findMany("api::tag.tag", {
+    filters: { nom: name, type },
     limit: 1
   });
 
   if (existing.length > 0) {
+    tagCache.set(cacheKey, existing[0].id);
     return existing[0].id;
   }
 
-  const created = await strapi.entityService.create('api::tag.tag', {
-    data: {
-      nom: name,
-      type: type
-    }
+  const created = await strapi.entityService.create("api::tag.tag", {
+    data: { 
+      nom: name, 
+      type }
   });
-  tagCache.set(key, created.id);
-
-
+  tagCache.set(cacheKey, created.id);
   return created.id;
 }
 
-async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
+// Thumbnail upload
+async function uploadImage(strapi, url, title) {
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    console.error("Image download failed:", url);
+    return null;
+  }
 
-  const xml = fs.readFileSync(xmlPath, "utf8");
-  const data = parser.parse(xml);
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  const filename = getFilenameFromUrl(url);
+  const mimeType = resp.headers.get("content-type") || "image/jpeg";
+  const tempPath = path.join(os.tmpdir(), `${Date.now()}-${filename}`);
 
-  const items = data.rss.channel.item;
-  // build thumbnail map from attachments before processing projects
-  const thumbMap = {};
-  if (Array.isArray(items)) {
-    for (const it of items) {
-      if (it["wp:post_type"] === "attachment") {
-        const parent = it["wp:post_parent"];
-        // there are two possible fields: attachment_url or link
-        const url = decodeXmlString(it["wp:attachment_url"] || it.link || "");
-        if (parent && url) {
-          thumbMap[parent] = url;
-        }
+  fs.writeFileSync(tempPath, buffer);
+
+  try {
+    const uploaded = await strapi.plugin("upload").service("upload").upload({
+      data: {
+        fileInfo: { name: filename, caption: title, alternativeText: title },
+      },
+      files: {
+        originalName: filename,
+        type: mimeType,
+        mimetype: mimeType,
+        size: buffer.length,
+        filepath: tempPath,
+      },
+    });
+    return uploaded?.[0]?.id ?? null;
+  } finally {
+    fs.unlinkSync(tempPath);
+  }
+}
+
+// Parse one project's postmeta
+function parsePostMeta(postMeta) {
+  let description = "";
+  let soustitre = null;
+  let status = "active";
+  let temporalite = "annuel";
+  let helloassoId = null;
+  let goal_amount = null;
+  let current_amount = null;
+  let powerpoint = null;
+  let quote_content = null;
+  let quote_author = null;
+  let thumbnail_id = 0;
+  let key_quote = "";
+
+  const QuoteMap = {};
+  const sections = {};
+  const faq = [];
+  const thanks = [];
+
+  for (const meta of postMeta) {
+    const key = meta["wp:meta_key"];
+    const value = decodeXmlString(meta["wp:meta_value"]);
+
+    // Thumbnail id
+    if (key === "_thumbnail_id") {
+      const num = Number(value);
+      thumbnail_id = Number.isFinite(num) ? num : 0;
+      continue;
+    }
+
+    // Quote image map
+    if (key.includes("colimage_section_texteimage_colimage_image") && !key.startsWith("_")) {
+      QuoteMap[key.replace(/^(sections_\d+)_.*$/, "$1")] = value;
+    }
+
+    // Skip empty / ACF field refs / noise keys
+    if (
+      !value ||
+      value.startsWith("field_") ||
+      key.includes("options") ||
+      key.includes("espacement") ||
+      key.includes("enabled")
+    ) continue;
+
+    // Skip heading-only values
+    if (["0", "h1", "h2", "h3", "h4"].includes(value)) continue;
+
+    // Simple scalar fields
+    if (key === "projet_intro")      { description = value; continue; }
+    if (key === "projet_subtitle")   { soustitre   = value; continue; }
+    if (key.includes("canva_link"))  { powerpoint  = value; continue; }
+
+    if (key === "projet_helloasso") {
+      const num = Number(value);
+      helloassoId = Number.isFinite(num) ? num : null;
+      continue;
+    }
+    if (key === "projet_recolte") {
+      const num = Number(value);
+      current_amount = Number.isFinite(num) ? num : null;
+      continue;
+    }
+    if (key === "projet_finance") {
+      const num = Number(value);
+      goal_amount = Number.isFinite(num) ? num : null;
+      continue;
+    }
+    if (key === "projet_temporalite" && value.includes("financé")) {
+      status = "funded";
+      continue;
+    }
+    if (key === "projet_type" && value.includes("pluriannuel")) {
+      temporalite = "pluriannuel";
+      continue;
+    }
+
+    // Quote block
+    if (value.includes("blockquote")) {
+      key_quote = key.replace(/^(sections_\d+)_.*$/, "$1");
+      const bqMatch = value.match(/<blockquote>([\s\S]*?)<\/blockquote>/);
+      const stMatch = value.match(/<strong>([\s\S]*?)<\/strong>/);
+      quote_content = bqMatch ? stripHtml(bqMatch[1]).trim() : null;
+      quote_author  = stMatch ? stripHtml(stMatch[1]).trim() : null;
+      continue;
+    }
+
+    // Sections
+    const sectionMatch = key?.match(/sections_(\d+)_(.*)/);
+    if (sectionMatch) {
+      const [, index, field] = sectionMatch;
+      if (!sections[index]) sections[index] = {};
+      sections[index][field] = value;
+      continue;
+    }
+
+    // FAQ
+    const faqMatch = key?.match(/faq_(\d+)_(.*)/);
+    if (faqMatch) {
+      const [, index, field] = faqMatch;
+      if (!faq[index]) faq[index] = {};
+      faq[index][field] = value;
+      continue;
+    }
+
+    // Remerciements
+    if (key?.includes("Merci") || key?.includes("remerciement")) {
+      thanks.push(value);
+    }
+  }
+
+  return {
+    description, soustitre, status, temporalite,
+    helloassoId, goal_amount, current_amount, powerpoint,
+    quote_content, quote_author, thumbnail_id,
+    key_quote, QuoteMap,
+    sections, faq, thanks,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Build markdown content
+// ---------------------------------------------------------------------------
+
+function buildContent(sections, faq, thanks) {
+  const faqSet    = new Set();
+  const thanksSet = new Set();
+  const faqItems  = [];
+
+  for (const sectionIndex in sections) {
+    const section = sections[sectionIndex];
+    for (const key in section) {
+      const value = section[key];
+
+      if (
+        value.includes("participés au projet") ||
+        value.includes("participé au projet") ||
+        value.includes("Merci") ||
+        value.includes("participés à ce projet")
+      ) {
+        const clean = stripHtml(value);
+        thanks.push(clean);
+        thanksSet.add(clean);
+      }
+
+      if (key.includes("titre") && value.includes("?")) {
+        const textKey = key.replace("titre", "texte");
+        const answer  = section[textKey] || "";
+        faqSet.add(stripHtml(value));
+        faqItems.push({ question: stripHtml(value), reponse: stripHtml(answer) });
       }
     }
   }
 
-  // only process behaviours
-  for (const item of items) {
-    if (item["wp:post_type"] !== "projet") {
-      continue; // skip non-project entries
+  const parts = [];
+  const sortedSections = Object.keys(sections).sort((a, b) => Number(a) - Number(b));
+
+  for (const i of sortedSections) {
+    const section = sections[i];
+
+    // Sections gérées ailleurs
+    if (["7", "9", "11", "13"].includes(i)) continue;
+
+    if (i === "1") {
+      const introTitle    = section["section_soustitre_soussoutitre"];
+      const sectionSub    = section["section_soustitre_soutitre"];
+      const subsubtitle   = section["section_soustitre_deuxsoutitre"];
+      if (introTitle)              parts.push(`## ${introTitle}`);
+      if (sectionSub)              parts.push(`**${sectionSub}**`);
+      if (subsubtitle)             parts.push(`**${subsubtitle}**`);
+      continue;
     }
 
-    const wordpressId = item["wp:post_id"];
-    const title = decodeXmlString(item.title);
+    const processed = new Set();
+    for (const key in section) {
+      if (processed.has(key)) continue;
+      const value = stripHtml(section[key]);
+      if (faqSet.has(value) || thanksSet.has(value)) continue;
 
-    let description = "";
-    let status = "active";
+      if (key.includes("titre") && !key.includes("soussoutitre")) {
+        const textKey  = key.replace("titre", "texte");
+        const textValue = stripHtml(section[textKey] || "");
+
+        if (faqSet.has(textValue) || thanksSet.has(textValue)) {
+          processed.add(key);
+          if (section[textKey]) processed.add(textKey);
+          continue;
+        }
+
+        parts.push(`### ${value}`);
+        if (textValue && textValue !== value) {
+          parts.push(textValue);
+          processed.add(textKey);
+        }
+        processed.add(key);
+      }
+    }
+  }
+
+  // FAQ
+  if (faqItems.length > 0) {
+    parts.push("## Parce que chaque question mérite une réponse !");
+    for (const q of faqItems) {
+      if (q.question && !q.question.includes("Pourquoi ?")) parts.push(`### ${q.question}`);
+      if (q.reponse) parts.push(q.reponse);
+    }
+  }
+
+  // Remerciements
+  const uniqueThanks = [...new Set(thanks)];
+  if (uniqueThanks.length > 0) {
+    parts.push("## Ensemble, nous faisons la différence !");
+    for (const t of uniqueThanks) parts.push(`- ${t}`);
+  }
+
+  return parts.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Main import
+// ---------------------------------------------------------------------------
+
+async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
+  const xml  = fs.readFileSync(xmlPath, "utf8");
+  const data = parser.parse(xml);
+  const items = data.rss.channel.item;
+
+  // Build attachment map:  thumbMap[post_parent][post_id] = url
+  const thumbMap = {};
+  if (Array.isArray(items)) {
+    for (const it of items) {
+      if (it["wp:post_type"] !== "attachment") continue;
+      const parent = it["wp:post_parent"];
+      const id     = it["wp:post_id"];
+      const url    = decodeXmlString(it["wp:attachment_url"] || it.link || "");
+      if (parent && url) {
+        if (!thumbMap[parent]) thumbMap[parent] = {};
+        thumbMap[parent][id] = url;
+      }
+    }
+  }
+
+  for (const item of items) {
+    if (item["wp:post_type"] !== "projet") continue;
+
+    const wordpressId = item["wp:post_id"];
+    const title       = decodeXmlString(item.title);
 
     const postMeta = Array.isArray(item["wp:postmeta"])
       ? item["wp:postmeta"]
       : [item["wp:postmeta"]];
 
-    let helloassoId = null;
-    let goal_amount = null;
-    let current_amount = null;
-    let temporalite = "annuel";
+    const parsed = parsePostMeta(postMeta);
 
-    let sections = {};
-    let faq = [];
-    let thanks = [];
+    let { status, temporalite, goal_amount, current_amount } = parsed;
+    const {
+      description, soustitre, helloassoId, powerpoint,
+      quote_content, quote_author, thumbnail_id,
+      key_quote, QuoteMap, sections, faq, thanks,
+    } = parsed;
 
-    for (const meta of postMeta) {
-      const key = meta["wp:meta_key"];
-      let rawVal = meta["wp:meta_value"];
-      let value = decodeXmlString(rawVal);
+    if (status === "funded") current_amount = goal_amount;
 
-      if (value==="0" || value==="h2"){
-        //console.log("key à rejetée", key);
-        //console.log(!value, value.startsWith("field_"), key.includes("options"), key.includes("espacement"), key.includes("enabled"))
-      }
+    const content     = buildContent(sections, faq, thanks);
+    const quote_pp_id = QuoteMap[key_quote];
 
-      // Skip empty/null values and ACF field keys (e.g. "field_..." values)
-      if (!value || value.startsWith("field_") || key.includes("options") || key.includes("espacement") || key.includes("enabled")) {
-        //console.log("key rejetée", key)
-        continue;
-      }
-      // we already trimmed during decode so nothing else needed
-
-      // DESCRIPTION
-      if (key === "projet_intro") {
-        description = value;
-      }
-
-      // HELLOASSO
-      if (key === "projet_helloasso") {
-        const num = Number(value);
-        helloassoId = Number.isFinite(num) ? num : null;
-      }
-
-      // AMOUNTS
-      if (["projet_recolte", "projet_finance", "projet_helloasso", "projet_type"].includes(key)) {
-      }
-
-      if (key === "projet_recolte") {
-        const num = Number(value);
-        current_amount = Number.isFinite(num) ? num : null;
-      }
-
-      // STATUS
-      if (key === "projet_temporalite" && value.includes("financé")) {
-        status = "funded";
-      }
-
-      if (key === "projet_type" && value.includes("pluriannuel")){
-        temporalite = "pluriannuel"
-      }
-
-      if (key === "projet_finance") {
-        const num = Number(value);
-        goal_amount = Number.isFinite(num) ? num : null;
-      }
-
-      if (key === "projet_helloasso") {
-        const num = Number(value);
-        helloassoId = Number.isFinite(num) ? num : null;
-      }
-
-    if (value==="0" || value === "h1" || value === "h2" || value === "h3" || value === "h4") {
-      continue;
-    }
-
-      // MATCH SECTIONS
-      const sectionMatch = key?.match(/sections_(\d+)_(.*)/);
-
-      if (sectionMatch) {
-
-        const index = sectionMatch[1];
-        const field = sectionMatch[2];
-
-        if (!sections[index]) {
-          sections[index] = {};
-        }
-
-        sections[index][field] = value;
-
-        continue;
-      }
-
-      // FAQ
-      if (key?.includes("?") || key?.includes("faq_")) {
-
-        const faqMatch = key.match(/faq_(\d+)_(.*)/);
-
-        if (faqMatch) {
-
-          const index = faqMatch[1];
-          const field = faqMatch[2];
-
-          if (!faq[index]) faq[index] = {};
-
-          faq[index][field] = value;
-        }
-      }
-
-      // REMERCIEMENTS
-      if (key?.includes("Merci") || key?.includes("remerciement")) {
-        thanks.push(value);
-      }
-    }
-
-    // ---------- PARSE SECTIONS FOR FAQs & THANKS ----------
-    // Extract FAQ from sections (keys containing "?" or "titre" that end in "texte")
-    const faqSet = new Set(); // track questions to avoid duplication
-    const thanksSet = new Set();
-    
-    for (const sectionIndex in sections) {
-      const section = sections[sectionIndex];
-
-      for (const key in section) {
-        const value = section[key];
-
-        // THANKS: check for "participés au projet"
-        if (value.includes("participés au projet") || value.includes("participé au projet") || value.includes("Merci") || value.includes("participés à ce projet")) {
-          thanks.push(stripHtml(value));
-          thanksSet.add(stripHtml(value));
-        }
-
-        // FAQ: if key contains "titre" and value has "?", pair it with the "texte" variant
-        if (key.includes("titre") && value.includes("?")) {
-          const textKey = key.replace("titre", "texte");
-          const faqTextValue = section[textKey] || "";
-          faqSet.add(stripHtml(value));
-          faq.push({
-            question: stripHtml(value),
-            reponse: stripHtml(faqTextValue)
-          });
-        }
-      }
-    }
-
-    // ---------- GENERATE MARKDOWN CONTENT ----------
-
-    let contentParts = [];
-    const sortedSections = Object.keys(sections).sort((a, b) => Number(a) - Number(b));
-
-    for (const i of sortedSections) {
-      const section = sections[i];
-      
-      const isFirstSection = i === "1";
-      const isFaqTitleSection = i === "7";
-      const isThanksSection = i === "11" || i === "13";
-      const isFaqSection = i === "9"; // FAQ answers section, skip these
-      
-      if (isFaqTitleSection || isThanksSection || isFaqSection) {
-        // These sections are handled elsewhere or combined into titles
-        continue;
-      }
-      
-      if (isFirstSection) {
-        // First section: "Pourquoi ? Comment ?" is the main question
-        // The subtitle and sub-subtitle are the answer (grouped together)
-        const introTitle = section["section_soustitre_soussoutitre"]; // "Pourquoi ? Comment ?"
-        const sectionsubtitle = section["section_soustitre_soutitre"]; // "Comprendre, agir & transformer"
-        const subsubtitle = section["section_soustitre_deuxsoutitre"]; // "Pourquoi ce projet est essentiel !"
-        
-        if (introTitle) {
-          contentParts.push(`## ${introTitle}`);
-        }
-        if (sectionsubtitle || subsubtitle) {
-          contentParts.push(`**${sectionsubtitle}**`);
-          if (subsubtitle) {
-            contentParts.push(`**${subsubtitle}**`);
-          }
-        }
-      } else {
-        // Other sections: process titre+texte pairs
-        const processed = new Set();
-        
-        for (const key in section) {
-          if (processed.has(key)) continue;
-          
-          const rawValue = section[key];
-          const value = stripHtml(rawValue);
-          
-          // Skip if in FAQ or thanks
-          if (faqSet.has(value) || thanksSet.has(value)) {
-            continue;
-          }
-          
-          // Pair titre with corresponding texte
-          if (key.includes("titre") && !key.includes("soussoutitre")) {
-            const textKey = key.replace("titre", "texte");
-            const textValue = stripHtml(section[textKey] || "");
-            
-            // Skip if text is in FAQ/thanks
-            if (faqSet.has(textValue) || thanksSet.has(textValue)) {
-              processed.add(key);
-              if (section[textKey]) processed.add(textKey);
-              continue;
-            }
-            
-            contentParts.push(`### ${value}`);
-            if (textValue && textValue !== value) {
-              contentParts.push(textValue);
-              processed.add(textKey);
-            }
-            processed.add(key);
-          }
-        }
-      }
-    }
-
-    // FAQ Markdown - with combined title
-    if (faq.length > 0) {
-      contentParts.push("## Parce que chaque question mérite une réponse !");
-      faq.forEach(q => {
-        if (q.question && !q.question.includes("Pourquoi ?")) {
-          contentParts.push(`### ${q.question}`);
-        }
-        if (q.reponse) {
-          contentParts.push(q.reponse);
-        }
-      });
-    }
-
-    // Remerciements Markdown - with combined title
-    if (thanks.length > 0) {
-      contentParts.push("## Ensemble, nous faisons la différence !");
-      thanks.forEach(t => {
-        contentParts.push(`- ${t}`);});
-    }
-
-    const content = contentParts.join("\n\n");
-
-    // ---------- TAGS ----------
-
+    // Tags
     let tagIds = [];
-
-if (item.category) {
-  const categories = Array.isArray(item.category)
-    ? item.category
-    : [item.category];
-
-
-  for (const cat of categories) {
-    const name = decodeXmlString(cat["#text"] || cat);
-    const type = cat["@_domain"] === "expertise"
-      ? "expertise"
-      : "category";
-
-    
-    const tagId = await getOrCreateTag(strapi, name, type);
-    tagIds.push(tagId);
-  }
-}
-
-    if (status === "funded"){
-      current_amount = goal_amount;
+    if (item.category) {
+      const categories = Array.isArray(item.category) ? item.category : [item.category];
+      for (const cat of categories) {
+        const name = decodeXmlString(cat["#text"] || cat);
+        const type = cat["@_domain"] === "expertise" ? "expertise" : "category";
+        tagIds.push(await getOrCreateTag(strapi, name, type));
+      }
     }
 
     const projectData = {
-      // debugging
-      //_debug_meta: { sections, faq, thanks, contentParts },
-
-      title,
-      description,
-      content,
-      temporalite,
-      status,
+      title, description, content, temporalite, status,
       wordpress_id: wordpressId,
       crm_id: helloassoId,
       last_sync: new Date(),
       tags: tagIds,
-      goal_amount,
-      current_amount
+      goal_amount, current_amount,
+      quote_content, quote_author,
+      soustitre, powerpoint,
     };
 
-    // attach thumbnail URL if we found one
-    const thumb = thumbMap[wordpressId];
-    if (thumb) {
-      // store raw URL for later upload or processing
-      projectData.thumbnail_url = thumb;
-    }
+    // Resolve image URLs
+    const thumbUrl   = thumbMap[wordpressId]?.[thumbnail_id];
+    const quoteImgUrl = thumbMap[wordpressId]?.[quote_pp_id];
 
     if (dryRun) {
-
       console.log("\n=======================");
-      console.log("PROJECT PREVIEW");
-      console.log("=======================\n");
-
+      console.log("PROJECT PREVIEW:", title);
+      console.log("=======================");
+      console.log("thumbnail_url :", thumbUrl   ?? "(none)");
+      console.log("quote_img_url :", quoteImgUrl ?? "(none)");
       console.dir(projectData, { depth: null });
-
       continue;
-
-    } else {
-
-    const { Readable } = require('stream');
-
-    console.log("Processing project:", title);
-    console.log("crm_id", projectData.crm_id);
-
-// Remplace le bloc d'upload par ceci :
-if (projectData.thumbnail_url) {
-  console.log("Processing thumbnail for project:", title);
-
-  try {
-    const resp = await fetch(projectData.thumbnail_url);
-
-    if (!resp.ok) {
-      console.error("Thumbnail download failed:", projectData.thumbnail_url);
-    } else {
-      const buffer = Buffer.from(await resp.arrayBuffer());
-      const filename = getFilenameFromUrl(projectData.thumbnail_url);
-      const mimeType = resp.headers.get("content-type") || "image/jpeg";
-      const osTmp = os.tmpdir()
-      const tempPath = `${osTmp}/${Date.now()}-${filename}`;
-
-      fs.writeFileSync(tempPath, buffer);
-
-      
-
-    const uploaded = await strapi.plugin('upload').service('upload').upload({
-        data: {
-            fileInfo: {
-            name: filename,
-            caption: title,
-            alternativeText: title,
-            }
-        },
-        files: {
-            originalName: filename,
-            type: mimeType,
-            size: buffer.length,
-            filepath: tempPath,
-            mimetype: mimeType,
-        },
-    });
-
-      fs.unlinkSync(tempPath);
-
-      if (uploaded && uploaded.length > 0) {
-        projectData.thumbnail = uploaded[0].id;
-        console.log("Thumbnail uploaded, id:", uploaded[0].id);
-      }
     }
-  } catch (err) {
-    console.error("Thumbnail upload error:", err);
-  }
 
+    // -----------------------------------------------------------------------
+    // Upload images then upsert — wrapped in a single try/catch so a failure
+    // on one project never poisons the PostgreSQL transaction for the next.
+    // -----------------------------------------------------------------------
+    try {
+      if (thumbUrl) {
+        console.log("Uploading thumbnail for:", title);
+        const id = await uploadImage(strapi, thumbUrl, title);
+        if (id) {
+          projectData.thumbnail = id;
+          console.log("Thumbnail uploaded, id:", id);
+        }
+      }
 
+      if (quoteImgUrl) {
+        console.log("Uploading quote image for:", title);
+        const id = await uploadImage(strapi, quoteImgUrl, title);
+        if (id) {
+          projectData.quote_pp = id;
+          console.log("Quote image uploaded, id:", id);
+        }
+      }
 
-    } try {
+      // Upsert
+      const existing = await strapi.entityService.findMany("api::project.project", {
+        filters: { wordpress_id: wordpressId },
+        populate: ["tags", "thumbnail"],
+        limit: 1,
+      });
 
-        const existing = await strapi.entityService.findMany(
-            "api::project.project",
-            {
-                filters: { wordpress_id: wordpressId },
-                populate: ["tags", "thumbnail"],
-                limit: 1
-            }
-        );
-
-        if (existing.length === 0) {
-
-            console.log("CREATE:", title);
-
-            await strapi.entityService.create(
-                "api::project.project",
-                {
-                    data: projectData
-                }
-            );
-
-
-
+      if (existing.length === 0) {
+        console.log("CREATE:", title);
+        await strapi.entityService.create("api::project.project", { data: projectData });
+      } else {
+        const existingProject = existing[0];
+        if (projectChanged(existingProject, projectData) || tagsChanged(existingProject.tags, tagIds)) {
+          console.log("UPDATE:", title);
+          await strapi.entityService.update("api::project.project", existingProject.id, { data: projectData });
         } else {
-
-            const existingProject = existing[0];
-
-            const hasContentChanged = projectChanged(existingProject, projectData);
-            const hasTagsChanged = tagsChanged(existingProject.tags, tagIds);
-
-            if (hasContentChanged || hasTagsChanged) {
-
-                console.log("UPDATE:", title);
-
-                await strapi.entityService.update(
-                    "api::project.project",
-                    existingProject.id,
-                    {
-                        data: projectData
-                    }
-                );
-
-            } else {
-
-                console.log("SKIP (no change):", title);
-
-            }
-
+          console.log("SKIP (no change):", title);
         }
-
-        } catch (err) {
-
-            console.error("CREATE/UPDATE ERROR:", title);
-
-            if (err.details?.errors) {
-                for (const e of err.details.errors) {
-                    console.error(
-                        `Field: ${e.path} | Message: ${e.message} | Value:`,
-                        e.value
-                    );
-                }
-            } else {
-                console.error(err);
-            }
+      }
+    } catch (err) {
+      console.error("ERROR processing project:", title);
+      if (err.details?.errors) {
+        for (const e of err.details.errors) {
+          console.error(`  Field: ${e.path} | ${e.message} | Value:`, e.value);
         }
+      } else {
+        console.error(err.message ?? err);
+      }
+      // Continue to next project — do NOT rethrow
     }
   }
 }
 
-async function syncFundingAmounts(strapi) {
+// ---------------------------------------------------------------------------
+// Sync funding amounts from CRM
+// ---------------------------------------------------------------------------
 
+async function syncFundingAmounts(strapi) {
   console.log("Sync funding amounts from CRM...");
 
   const resp = await fetch("http://localhost:3001/api/sync_funding_amount");
@@ -578,72 +500,34 @@ async function syncFundingAmounts(strapi) {
     return;
   }
 
-  const crmProjects = data.result;
+  const projects = await strapi.entityService.findMany("api::project.project", {
+    fields: ["id", "title", "crm_id", "goal_amount", "current_amount", "status"],
+    limit: 10000,
+  });
 
-  // récupérer tous les projets Strapi
-  const projects = await strapi.entityService.findMany(
-    "api::project.project",
-    {
-      fields: ["id", "title", "crm_id", "goal_amount", "current_amount", "status"],
-      limit: 10000
-    }
-  );
-
-  // indexer les projets par crm_id
   const projectMap = new Map();
-
   for (const p of projects) {
-    if (p.status === "funded") continue; // ne pas sync les projets déjà financés
-    if (p.crm_id) {
-      projectMap.set(String(p.crm_id), p);
-    }
+    if (p.status === "funded" || !p.crm_id) continue;
+    projectMap.set(String(p.crm_id), p);
   }
 
-  for (const crmProject of crmProjects) {
-
+  for (const crmProject of data.result) {
     const crmId = String(crmProject.project_number_Raw);
+    if (!projectMap.has(crmId)) continue;
 
-    if (!projectMap.has(crmId)) {
-      continue;
-    }
-
-    const project = projectMap.get(crmId);
-
-    const newGoal = crmProject.amount_target_Raw ?? 0;
+    const project   = projectMap.get(crmId);
+    const newGoal   = crmProject.amount_target_Raw  ?? 0;
     const newCurrent = crmProject.amount_current_Raw ?? 0;
 
-    if (
-      Number(project.goal_amount) !== Number(newGoal) ||
-      Number(project.current_amount) !== Number(newCurrent)
-    ) {
-
-      console.log(
-        `UPDATE FUNDING: ${project.title}`,
-        project.current_amount,
-        "→",
-        newCurrent
-      );
-
-      await strapi.entityService.update(
-        "api::project.project",
-        project.id,
-        {
-          data: {
-            goal_amount: newGoal,
-            current_amount: newCurrent
-          }
-        }
-      );
-
+    if (Number(project.goal_amount) !== Number(newGoal) || Number(project.current_amount) !== Number(newCurrent)) {
+      console.log(`UPDATE FUNDING: ${project.title}`, project.current_amount, "→", newCurrent);
+      await strapi.entityService.update("api::project.project", project.id, {
+        data: { goal_amount: newGoal, current_amount: newCurrent },
+      });
     }
-
   }
 
   console.log("Funding sync finished");
-
 }
 
-module.exports = {
-  importWordpress,
-  syncFundingAmounts
-};
+module.exports = { importWordpress, syncFundingAmounts };
