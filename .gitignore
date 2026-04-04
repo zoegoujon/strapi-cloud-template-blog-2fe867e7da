@@ -15,6 +15,10 @@ notes.txt
 
 chuchoteurs-naovie-firebase-adminsdk-fbsvc-dc7d5dc28e.json
 
+.prettierrc
+eslint.config.mjs
+settings.json
+
 
 ############################
 # Linux

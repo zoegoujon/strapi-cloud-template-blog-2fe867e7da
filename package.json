@@ -12,11 +12,11 @@
     "strapi": "strapi"
   },
   "dependencies": {
-    "@strapi/admin": "5.34.0",
-    "@strapi/plugin-cloud": "5.34.0",
-    "@strapi/plugin-users-permissions": "5.34.0",
-    "@strapi/provider-upload-local": "5.34.0",
-    "@strapi/strapi": "5.34.0",
+    "@strapi/admin": "5.41.1",
+    "@strapi/plugin-cloud": "5.41.1",
+    "@strapi/plugin-users-permissions": "5.41.1",
+    "@strapi/provider-upload-local": "5.41.1",
+    "@strapi/strapi": "^5.41.1",
     "better-sqlite3": "11.3.0",
     "fast-xml-parser": "^5.5.3",
     "firebase-admin": "^13.7.0",
