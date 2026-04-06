@@ -462,12 +462,20 @@ export interface ApiUserProjectUserProject extends Struct.CollectionTypeSchema {
   };
   options: {
     draftAndPublish: false;
+    indexes: [
+      {
+        columns: ["user_id", "project_id"];
+        name: "unique_user_project";
+        type: "unique";
+      },
+    ];
   };
   attributes: {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> & Schema.Attribute.Private;
     donation_count: Schema.Attribute.Integer;
     followed_since: Schema.Attribute.DateTime;
+    liked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<"oneToMany", "api::user-project.user-project"> &
       Schema.Attribute.Private;

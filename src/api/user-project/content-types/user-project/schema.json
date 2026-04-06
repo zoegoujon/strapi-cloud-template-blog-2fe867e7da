@@ -1,13 +1,36 @@
 {
   "kind": "collectionType",
   "collectionName": "user_projects",
-  "info": {"singularName": "user-project","pluralName": "user-projects","displayName": "User Project"},
-  "options": {"draftAndPublish": false},
+  "info": {
+    "singularName": "user-project",
+    "pluralName": "user-projects",
+    "displayName": "User Project"
+  },
   "attributes": {
-    "followed_since": {"type": "datetime"},
-    "total_donated": {"type": "decimal"},
-    "donation_count": {"type": "integer"},
-    "user": {"type": "relation", "relation": "manyToOne", "target": "plugin::users-permissions.user"},
-    "project": {"type": "relation","relation": "manyToOne","target": "api::project.project","inversedBy": "user_projects"}
+    "followed_since": { "type": "datetime" },
+    "total_donated": { "type": "decimal" },
+    "donation_count": { "type": "integer" },
+    "liked": { "type": "boolean", "default": false },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "user_projects"
+    }
+  },
+  "options": {
+    "indexes": [
+      {
+        "name": "unique_user_project",
+        "columns": ["user_id", "project_id"],
+        "type": "unique"
+      }
+    ],
+    "draftAndPublish": false
   }
 }
