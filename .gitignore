@@ -12,6 +12,7 @@ Icon
 node_modules
 .env
 notes.txt
+logs/
 
 chuchoteurs-naovie-firebase-adminsdk-fbsvc-dc7d5dc28e.json
 
