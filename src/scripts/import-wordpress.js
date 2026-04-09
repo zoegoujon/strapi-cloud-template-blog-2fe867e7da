@@ -142,7 +142,11 @@ async function uploadImage(strapi, url, title, existingFile = null) {
     if (id) console.log("  Image uploaded, id:", id);
     return id;
   } finally {
-    fs.unlinkSync(tempPath);
+    try {
+      fs.unlinkSync(tempPath);
+    } catch (unlinkErr) {
+      console.warn("Could not delete temp file (non-critical):", tempPath);
+    }
   }
 }
 
