@@ -1,3 +1,5 @@
+const { syncFunding, syncDonsUser } = require("./cron-task.js");
+
 module.exports = ({ env }) => ({
   host: env('HOST', '0.0.0.0'),
   port: env.int('PORT', 1337),
@@ -12,4 +14,11 @@ module.exports = ({ env }) => ({
       enabled: true,
     },
   },
+  cron: {
+    enabled: true,
+   tasks: {
+      syncFunding,
+      syncDonsUser,
+    },
+  }
 });
