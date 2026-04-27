@@ -1,21 +1,49 @@
+'use strict';
 module.exports = (plugin) => {
-  // Sauvegarde le controller original
-  const originalAuth = plugin.controllers.auth;
 
-  // Remplace par une factory qui étend le controller original
+  // Garde une référence vers la factory originale
+  const originalAuthController = plugin.controllers.auth;
+
+  // On remplace par une nouvelle factory qui étend la précédente
   plugin.controllers.auth = ({ strapi }) => {
-    const controller = typeof originalAuth === 'function'
-      ? originalAuth({ strapi })
-      : originalAuth;
+    const base = originalAuthController({ strapi });
 
     return {
-      ...controller,
-      saveFCM: async (ctx) => {
-        const res = await strapi.documents('plugin::users-permissions.user').update({
-          documentId: ctx.state.user.documentId,
-          data: { fcm: ctx.request.body.token },
-        });
-        ctx.body = res;
+      ...base,
+
+      /**
+       * POST /api/auth/local/fcm
+       * Enregistre ou efface le token FCM de l'utilisateur connecté.
+       * Body: { token: string | null }
+       */
+      async saveFCM(ctx) {
+        const { token } = ctx.request.body;
+
+        if (token !== null && typeof token !== 'string') {
+          return ctx.badRequest('Le champ token doit être une string ou null.');
+        }
+
+        // ctx.state.user est rempli par le middleware JWT de Strapi
+        if (!ctx.state.user) {
+          return ctx.unauthorized('Vous devez être connecté.');
+        }
+
+        try {
+          const updated = await strapi.entityService.update(
+            'plugin::users-permissions.user',
+            ctx.state.user.id,
+            { data: { fcm: token ?? null } }
+          );
+
+          ctx.body = {
+            id: updated.id,
+            email: updated.email,
+            fcm: updated.fcm,
+          };
+        } catch (err) {
+          strapi.log.error('[saveFCM] Erreur :', err);
+          ctx.internalServerError('Impossible de sauvegarder le token FCM.');
+        }
       },
     };
   };
@@ -27,6 +55,7 @@ module.exports = (plugin) => {
     config: {
       prefix: '',
       policies: [],
+      middlewares: [],
     },
   });
 

@@ -456,6 +456,8 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
       'api::project.project'
     > &
       Schema.Attribute.Private;
+    notified_thresholds: Schema.Attribute.JSON &
+      Schema.Attribute.DefaultTo<[0]>;
     powerpoint: Schema.Attribute.Text;
     publishedAt: Schema.Attribute.DateTime;
     quote_author: Schema.Attribute.String;

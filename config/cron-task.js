@@ -197,4 +197,176 @@ async function syncDonsHelloAsso(strapi) {
   );
 }
 
-module.exports = { syncFunding, syncDonsUser };
+// ── Cron 3 : Vérification des seuils de financement pour notifications (toutes les heures) ─────────
+
+const THRESHOLDS = [25, 50, 75, 100];
+
+const fundingThresholdCheck = {
+  task:  async ({ strapi }) => {
+    strapi.log.info('[CRON] fundingThresholdCheck — démarrage');
+
+    try {
+      // 1. Récupère tous les projets actifs ayant un goal_amount défini
+      const projects = await strapi.entityService.findMany('api::project.project', {
+        filters: {
+          status: 'active',
+          goal_amount: { $gt: 0 },
+        },
+        fields: ['id', 'title', 'current_amount', 'goal_amount', 'notified_thresholds'],
+      });
+
+      strapi.log.info(`[CRON] ${projects.length} projet(s) actif(s) à vérifier`);
+
+      for (const project of projects) {
+        await checkProjectThreshold(strapi, project);
+      }
+    } catch (err) {
+      strapi.log.error('[CRON] Erreur lors de la vérification des seuils :', err);
+    }
+
+      strapi.log.info('[CRON] fundingThresholdCheck — terminé');
+    },
+  options: {
+    rule: process.env.CRON_FUNDING_THRESHOLD_CHECK || '*/2 * * * *',
+  },
+};
+ 
+/**
+ * Vérifie si un projet a franchi un nouveau seuil et envoie les notifications.
+ */
+async function checkProjectThreshold(strapi, project) {
+  const { id, title, current_amount, goal_amount } = project;
+ 
+  if (!goal_amount || goal_amount <= 0) return;
+ 
+  const percentage = (current_amount / goal_amount) * 100;
+ 
+  // Seuils déjà notifiés (tableau stocké en JSON dans la DB)
+  const alreadyNotified = Array.isArray(project.notified_thresholds)
+    ? project.notified_thresholds
+    : [];
+ 
+  // Seuils franchis mais pas encore notifiés
+  const newThresholds = THRESHOLDS.filter(
+    (t) => percentage >= t && !alreadyNotified.includes(t)
+  );
+ 
+  if (newThresholds.length === 0) return;
+ 
+  strapi.log.info(
+    `[CRON] Projet #${id} "${title}" — nouveaux seuils : ${newThresholds.join(', ')}%`
+  );
+ 
+  // 2. Trouve tous les user-projects associés à ce projet
+  const userProjects = await strapi.entityService.findMany('api::user-project.user-project', {
+    filters: { project: id },
+    populate: { user: { fields: ['id', 'notif_push', 'fcm'] } },
+  });
+ 
+  // 3. Filtre les users ayant autorisé les notifications et possédant un token FCM
+  const eligibleUsers = userProjects
+    .map((up) => up.user)
+    .filter((u) => u && u.notif_push === true && u.fcm);
+ 
+  strapi.log.info(
+    `[CRON] Projet #${id} — ${eligibleUsers.length} user(s) éligible(s) à notifier`
+  );
+ 
+  // 4. Envoie une notification pour chaque seuil franchi
+  for (const threshold of newThresholds) {
+    const notifPayload = buildNotificationPayload(title, threshold, percentage);
+ 
+    if (eligibleUsers.length > 0) {
+      const tokens = eligibleUsers.map((u) => u.fcm);
+      await sendMulticastNotification(strapi, tokens, notifPayload, project.id, threshold);
+    }
+  }
+ 
+  // 5. Met à jour les seuils notifiés en DB pour éviter les doublons
+  const updatedThresholds = [...alreadyNotified, ...newThresholds];
+  await strapi.entityService.update('api::project.project', id, {
+    data: { notified_thresholds: updatedThresholds },
+  });
+}
+ 
+/**
+ * Construit le payload FCM selon le seuil franchi.
+ */
+function buildNotificationPayload(projectTitle, threshold, currentPercentage) {
+  const messages = {
+    25:  { title: '🎉 Premier quart atteint !',       body: `Le projet "${projectTitle}" a atteint 25% de son objectif !` },
+    50:  { title: '🚀 La moitié du chemin parcourue !', body: `Le projet "${projectTitle}" est financé à 50% !` },
+    75:  { title: '💪 Trois quarts atteints !',        body: `Le projet "${projectTitle}" est financé à 75% !` },
+    100: { title: '🏆 Objectif atteint !',              body: `Le projet "${projectTitle}" est entièrement financé !` },
+  };
+ 
+  const { title, body } = messages[threshold] || {
+    title: `Seuil ${threshold}% atteint`,
+    body:  `Le projet "${projectTitle}" a franchi les ${threshold}%.`,
+  };
+ 
+  return {
+    notification: { title, body },
+    data: {
+      type:      'funding_threshold',
+      threshold: String(threshold),
+      project:   projectTitle,
+      percent:   String(Math.round(currentPercentage)),
+    },
+  };
+}
+ 
+/**
+ * Envoie la notification en multicast via strapi.notification.sendToAll
+ * (ou via sendNotification token par token en fallback).
+ */
+async function sendMulticastNotification(strapi, tokens, payload, projectId, threshold) {
+  try {
+    if (strapi.notification?.sendToAll) {
+      // On réutilise sendToAll mais en ciblant uniquement les tokens du projet
+      // => On appelle directement firebase messaging pour le multicast ciblé
+      const messaging = strapi.firebase?.messaging();
+      if (!messaging) {
+        strapi.log.warn('[FCM] Instance Firebase non disponible');
+        return;
+      }
+ 
+      // Découpe en lots de 500 (limite Firebase)
+      const chunks = [];
+      for (let i = 0; i < tokens.length; i += 500) {
+        chunks.push(tokens.slice(i, i + 500));
+      }
+ 
+      for (const chunk of chunks) {
+        const response = await messaging.sendEachForMulticast({
+          tokens: chunk,
+          ...payload,
+        });
+ 
+        strapi.log.info(
+          `[FCM] Projet #${projectId} seuil ${threshold}% : ` +
+          `${response.successCount} succès, ${response.failureCount} échecs sur ${chunk.length} tokens`
+        );
+ 
+        // Log des tokens en échec pour nettoyage éventuel
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            strapi.log.warn(
+              `[FCM] Token invalide (projet #${projectId}) : ${chunk[idx]} — ${resp.error?.code}`
+            );
+          }
+        });
+      }
+    } else {
+
+      // Fallback token par token
+      for (const token of tokens) {
+        strapi.notification.sendNotification(token, payload);
+      }
+    }
+  } catch (err) {
+    strapi.log.error(`[FCM] Erreur envoi multicast projet #${projectId} seuil ${threshold}% :`, err);
+  }
+};
+
+module.exports = { syncFunding, syncDonsUser, fundingThresholdCheck };

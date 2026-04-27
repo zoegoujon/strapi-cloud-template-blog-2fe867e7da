@@ -1,4 +1,4 @@
-const { syncFunding, syncDonsUser } = require("./cron-task.js");
+const { syncFunding, syncDonsUser, fundingThresholdCheck } = require("./cron-task.js");
 
 module.exports = ({ env }) => ({
   host: env('HOST', '0.0.0.0'),
@@ -19,6 +19,7 @@ module.exports = ({ env }) => ({
    tasks: {
       syncFunding,
       syncDonsUser,
+      fundingThresholdCheck,
     },
   }
 });
