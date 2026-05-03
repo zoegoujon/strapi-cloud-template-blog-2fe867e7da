@@ -1,3 +1,6 @@
+/**
+ * Fichier import-wordpress.js  
+ */
 const fs = require("fs");
 const { XMLParser } = require("fast-xml-parser");
 const he = require("he");
@@ -17,15 +20,28 @@ const tagCache = new Map();
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Fonction strip Html
+ * @param {*} html - Paramètre html
+ */
 function stripHtml(html) {
   if (!html) return "";
   return html.replace(/<[^>]*>/g, "").trim();
 }
 
+/**
+ * Récupère Filename From Url
+ * @param {string} url - URL ou endpoint API
+ */
 function getFilenameFromUrl(url) {
   return path.basename(url.split("?")[0]);
 }
 
+/**
+ * Fonction decode Xml String
+ * @param {*} raw - Paramètre raw
+ * @return {string} Chaîne décodée et nettoyée des espaces superflus. Gère les formats texte brut, CDATA, et les nombres.
+ */
 function decodeXmlString(raw) {
   let str = "";
   if (typeof raw === "string") {
@@ -40,6 +56,12 @@ function decodeXmlString(raw) {
   return he.decode(str).trim();
 }
 
+/**
+ * Fonction project Changed
+ * @param {*} existing - Paramètre existing
+ * @param {*} incoming - Paramètre incoming
+ * @return {boolean} true si une différence est détectée sur les champs surveillés, false sinon. Les champs numériques et les URLs d'images sont comparés de manière plus tolérante.
+ */
 function projectChanged(existing, incoming) {
   const fields = [
     "title",
@@ -69,12 +91,24 @@ function projectChanged(existing, incoming) {
   return false;
 }
 
+/**
+ * Fonction tags Changed
+ * @param {*} existingTags - Paramètre existingTags
+ * @param {*} newTagIds - Paramètre newTagIds
+ */
 function tagsChanged(existingTags = [], newTagIds = []) {
   const a = existingTags.map((t) => t.id).sort();
   const b = [...newTagIds].sort();
   return JSON.stringify(a) !== JSON.stringify(b);
 }
 
+/**
+ * Récupère Or Create Tag
+ * @param {*} strapi - Paramètre strapi
+ * @param {*} name - Paramètre name
+ * @param {*} type - Paramètre type
+ * @return {Promise<number>} ID de la tag existante ou nouvellement créée. Utilise un cache en mémoire pour éviter les requêtes redondantes lors de l'import.
+ */
 async function getOrCreateTag(strapi, name, type) {
   const cacheKey = `${name}-${type}`;
   if (tagCache.has(cacheKey)) return tagCache.get(cacheKey);
@@ -102,6 +136,14 @@ async function getOrCreateTag(strapi, name, type) {
 // stored in its `caption` field. Returns the Strapi file id to use.
 // ---------------------------------------------------------------------------
 
+/**
+ * Téléverse Image
+ * @param {*} strapi - Paramètre strapi
+ * @param {string} url - URL ou endpoint API
+ * @param {*} title - Paramètre title
+ * @param {*} existingFile - Paramètre existingFile
+ * @return {Promise<number|null>} ID du fichier Strapi créé ou existant, ou null si le téléchargement a échoué. Utilise le champ `caption` pour détecter les doublons basés sur l'URL source.
+ */
 async function uploadImage(strapi, url, title, existingFile = null) {
   if (existingFile?.caption === url) {
     console.log("  Image unchanged, reusing id:", existingFile.id);
@@ -154,6 +196,11 @@ async function uploadImage(strapi, url, title, existingFile = null) {
 // Parse one project's postmeta
 // ---------------------------------------------------------------------------
 
+/**
+ * Analyse Post Meta
+ * @param {*} postMeta - Paramètre postMeta
+ * @return {Object} Objet structuré avec les données extraites du postmeta, incluant description, statut, montants, URLs d'images, sections de contenu, FAQ, et remerciements. Gère les différentes conventions de nommage utilisées dans le postmeta pour organiser les données.
+ */
 function parsePostMeta(postMeta) {
   let description = "";
   let soustitre = null;
@@ -289,6 +336,13 @@ function parsePostMeta(postMeta) {
 // Build markdown content
 // ---------------------------------------------------------------------------
 
+/**
+ * Construit Content
+ * @param {*} sections - Paramètre sections
+ * @param {*} faq - Paramètre faq
+ * @param {*} thanks - Paramètre thanks
+ * @return {string} Contenu formaté en markdown, structuré à partir des sections du projet, avec une FAQ et une section de remerciements. Les titres sont convertis en niveaux de heading, et les éléments de FAQ et de remerciements sont mis en avant.
+ */
 function buildContent(sections, faq, thanks) {
   const faqSet = new Set();
   const thanksSet = new Set();
@@ -381,6 +435,13 @@ function buildContent(sections, faq, thanks) {
 // Main import
 // ---------------------------------------------------------------------------
 
+/**
+ * Fonction import Wordpress
+ * @param {*} strapi - Paramètre strapi
+ * @param {*} xmlPath - Paramètre xmlPath
+ * @param {Object} dryRun
+ * @return {Promise<void>} Ne renvoie rien directement, effectue l'import des projets depuis un fichier XML exporté de WordPress. Pour chaque projet, vérifie s'il existe déjà dans Strapi en se basant sur l'ID WordPress, compare les données et les images pour décider s'il faut créer, mettre à jour, ou ignorer le projet. En mode dryRun, affiche un aperçu des données qui seraient importées sans effectuer de modifications dans Strapi.
+ */
 async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
   const xml = fs.readFileSync(xmlPath, "utf8");
   const data = parser.parse(xml);
@@ -534,6 +595,11 @@ async function importWordpress(strapi, xmlPath, { dryRun = false } = {}) {
 // Sync funding amounts from CRM
 // ---------------------------------------------------------------------------
 
+/**
+ * Synchronise Funding Amounts
+ * @param {*} strapi - Paramètre strapi
+ * @return {Promise<void>} Ne renvoie rien directement, synchronise les montants de financement des projets depuis le CRM. Récupère les données de financement via une API dédiée, compare avec les projets existants dans Strapi en se basant sur l'ID CRM, et met à jour les champs `goal_amount` et `current_amount` si des différences sont détectées. En cas d'erreur de connexion ou de données invalides, la fonction log l'erreur et quitte sans effectuer de modifications.
+ */
 async function syncFundingAmounts(strapi) {
   console.log("Sync funding amounts from CRM...");
 

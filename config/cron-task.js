@@ -1,9 +1,18 @@
+/**
+ * Fichier cron-task.js  
+ */
 // config/cron-tasks.js
 'use strict';
 
 const { syncFundingAmounts } = require('../src/scripts/import-wordpress.js');
 
 // ── Helpers logs ──────────────────────────────────────────────────────────────
+/**
+ * Fonction log
+ * @param {*} cronName - Paramètre cronName
+ * @param {*} status - Paramètre status
+ * @param {*} detail - Paramètre detail
+ */
 function log(cronName, status, detail = '') {
   const ts = new Date().toISOString();
   console.log(`[CRON][${ts}] ${cronName} → ${status} ${detail}`);
@@ -44,6 +53,10 @@ const syncDonsUser = {
 };
 
 // ── Logique sync dons HelloAsso ───────────────────────────────────────────────
+/**
+ * Synchronise Dons Hello Asso
+ * @param {*} strapi - Paramètre strapi
+ */
 async function syncDonsHelloAsso(strapi) {
   const FACADE_URL = process.env.API_BASE_URL || 'http://localhost:3001';
 
@@ -227,12 +240,15 @@ const fundingThresholdCheck = {
       strapi.log.info('[CRON] fundingThresholdCheck — terminé');
     },
   options: {
-    rule: process.env.CRON_FUNDING_THRESHOLD_CHECK || '*/2 * * * *',
+    rule: process.env.CRON_FUNDING_THRESHOLD_CHECK || '*/60 * * * *',
   },
 };
  
 /**
  * Vérifie si un projet a franchi un nouveau seuil et envoie les notifications.
+ * @param {*} strapi - Paramètre strapi
+ * @param {*} project - Paramètre project
+ * @return {Promise<void>} Ne renvoie rien directement, gère les notifications et les mises à jour en DB.
  */
 async function checkProjectThreshold(strapi, project) {
   const { id, title, current_amount, goal_amount } = project;
@@ -291,6 +307,10 @@ async function checkProjectThreshold(strapi, project) {
  
 /**
  * Construit le payload FCM selon le seuil franchi.
+ * @param {string} projectTitle - Titre du projet
+ * @param {number} threshold - Seuil franchi (25, 50, 75, 100)
+ * @param {number} currentPercentage - Pourcentage actuel de financement
+ * @return {Object} Payload formaté pour FCM
  */
 function buildNotificationPayload(projectTitle, threshold, currentPercentage) {
   const messages = {
@@ -319,6 +339,12 @@ function buildNotificationPayload(projectTitle, threshold, currentPercentage) {
 /**
  * Envoie la notification en multicast via strapi.notification.sendToAll
  * (ou via sendNotification token par token en fallback).
+ * @param {*} strapi - Paramètre strapi
+ * @param {Array<string>} tokens - Liste des tokens FCM à notifier
+ * @param {Object} payload - Payload de la notification à envoyer
+ * @param {number|string} projectId - ID du projet (pour logs)
+ * @param {number} threshold - Seuil franchi (pour logs)
+ * @return {Promise<void>} Ne renvoie rien directement, gère les envois et les logs.
  */
 async function sendMulticastNotification(strapi, tokens, payload, projectId, threshold) {
   try {

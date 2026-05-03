@@ -1,7 +1,14 @@
 'use strict';
+/**
+ * Fichier index.js  
+ */
 var admin = require("firebase-admin");
 var serviceAccount = require("./chuchoteurs-naovie-firebase-adminsdk-fbsvc-dc7d5dc28e.json");
 
+/**
+ * Fonction facade Headers*
+ * @return {Object} Headers à utiliser pour les requêtes vers la façade, incluant Authorization si FACADE_SECRET est défini.
+ */
 function facadeHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   if (process.env.FACADE_SECRET) {
@@ -10,6 +17,10 @@ function facadeHeaders() {
   return headers;
 }
 
+/**
+ * Fonction facade Base
+ * @return {string} URL de base pour les requêtes vers la façade, par défaut http://localhost:3001 si FACADE_URL n'est pas défini.
+ */
 function facadeBase() {
   return process.env.FACADE_URL || 'http://localhost:3001';
 }
@@ -17,6 +28,7 @@ function facadeBase() {
 module.exports = {
   register({ strapi }) {
     const userContentType = strapi.contentType('plugin::users-permissions.user');
+    //personnalisation du modèle User de Strapi pour ajouter les champs nécessaires à notre application (helloasso_id, notif_mail, notif_push, fcm, etc.)
     Object.assign(userContentType.attributes, {
       first_name:   { type: 'string' },
       last_name:    { type: 'string' },
@@ -29,7 +41,7 @@ module.exports = {
   },
 
   bootstrap({ strapi }) {
-
+    // Initialisation Firebase Admin SDK
     const firebase = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });

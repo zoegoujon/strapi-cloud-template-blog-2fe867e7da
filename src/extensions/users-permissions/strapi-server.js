@@ -1,4 +1,11 @@
 'use strict';
+/**
+ * Fichier strapi-server.js  
+ */
+/**
+ * Fonction module.exports
+ * @param {*} plugin - Paramètre plugin
+ */
 module.exports = (plugin) => {
 
   // Garde une référence vers la factory originale

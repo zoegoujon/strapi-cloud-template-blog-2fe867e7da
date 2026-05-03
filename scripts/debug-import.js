@@ -1,3 +1,6 @@
+/**
+ * Fichier debug-import.js  
+ */
 const Strapi = require('@strapi/strapi');
 
 (async () => {
@@ -7,7 +10,7 @@ const Strapi = require('@strapi/strapi');
   const importWordpress = require("../src/scripts/import-wordpress.js");
 
   await importWordpress.importWordpress(app, "./soutenirnaovie.xml", {
-    dryRun: false
+    dryRun: false // Mettre à true pour simuler sans créer de données dans Strapi
   });
 
   await importWordpress.syncFundingAmounts(app);

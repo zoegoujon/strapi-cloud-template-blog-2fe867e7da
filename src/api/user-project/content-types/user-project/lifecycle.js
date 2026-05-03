@@ -1,3 +1,7 @@
+/**
+ * Fichier lifecycle.js  
+ * Vérification que le couple user id et project id est unique pour éviter les doublons dans les suivis de projet par les utilisateurs.
+ */
 module.exports = {
   async beforeCreate(event) {
     const { user, project } = event.params.data;
